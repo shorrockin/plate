@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	logPkg "log"
 	"os"
+	"os/exec"
 	"os/user"
 	"path"
 	"path/filepath"
@@ -161,20 +162,8 @@ func (p *plate) execute(name string, args ...string) error {
 
 	for _, tpl := range t.Templates() {
 		name := tpl.Name()
+
 		if name != "" {
-			path := p.buildOutPath(name)
-			dir := filepath.Dir(path)
-			err := os.MkdirAll(dir, 0777)
-			if err != nil {
-				return err
-			}
-
-			log.Printf("Creating file %s\n", path)
-			f, err := os.Create(path)
-			if err != nil {
-				return err
-			}
-
 			buf := bytes.NewBuffer([]byte{})
 			err = tpl.Execute(buf, nil)
 			if err != nil {
@@ -182,7 +171,41 @@ func (p *plate) execute(name string, args ...string) error {
 			}
 
 			tplContent := strings.TrimSpace(buf.String())
-			io.WriteString(f, tplContent)
+
+			// templates who's name start with "# " are indicating a command set
+			if strings.HasPrefix(string(name), "# ") {
+				log.Printf("Executing command set: %s\n", strings.TrimPrefix(string(name), "# "))
+				commands := strings.Split(tplContent, "\n")
+				for _, command := range commands {
+					log.Printf("\t # %s\n", command)
+					args := strings.Split(command, " ")
+					if len(args) > 0 {
+						cmd := exec.Command(args[0], args[1:]...)
+						out := bytes.Buffer{}
+
+						cmd.Stdout = &out
+						err := cmd.Run()
+						if err != nil {
+							return err
+						}
+					}
+				}
+			} else {
+				path := p.buildOutPath(name)
+				dir := filepath.Dir(path)
+				err := os.MkdirAll(dir, 0777)
+				if err != nil {
+					return err
+				}
+
+				log.Printf("Creating file %s\n", path)
+				f, err := os.Create(path)
+				if err != nil {
+					return err
+				}
+
+				io.WriteString(f, tplContent)
+			}
 		}
 	}
 

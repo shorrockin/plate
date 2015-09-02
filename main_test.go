@@ -34,9 +34,9 @@ func TestPlate_OpenTemplate(t *testing.T) {
 	mainTpl, err := p.openTemplate("go")
 	assert.NotNil(t, mainTpl)
 	assert.Nil(t, err)
-	assert.Equal(t, 4, len(mainTpl.Templates()))
+	assert.Equal(t, 6, len(mainTpl.Templates()))
 
-	names := []string{"main.go", "main_test.go", "config/app.config"}
+	names := []string{"main.go", "main_test.go", "config/app.config", "bin/test_command.sh"}
 	for _, name := range names {
 		tpl := mainTpl.Lookup(name)
 		assert.NotNil(t, tpl)

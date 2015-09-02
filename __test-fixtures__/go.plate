@@ -18,6 +18,14 @@ func TestFoo(t *testing.T) {
 {{end}}
 
 
+{{define "bin/test_command.sh"}}
+echo "Hello World"
+{{end}}
+
+{{define "# change the necessary file permissions"}}
+chmod 755 bin/test_command.sh
+{{end}}
+
 {{define "config/app.config"}}
 config file
 {{end}}
