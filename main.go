@@ -160,51 +160,74 @@ func (p *plate) execute(name string, args ...string) error {
 		return err
 	}
 
+	getContent := func(tpl *template.Template) (string, error) {
+		buf := bytes.NewBuffer([]byte{})
+		err = tpl.Execute(buf, nil)
+		if err != nil {
+			return "", err
+		}
+
+		return strings.TrimSpace(buf.String()), nil
+	}
+
+	isCommand := func(str string) bool {
+		return strings.HasPrefix(str, "# ")
+	}
+
+	// templates are not processed in order. for this reason it's pretty common that
+	// command sets rely on files created and as such we'll iterate over this twice
+	// first creating all the files then executing command sets
 	for _, tpl := range t.Templates() {
 		name := tpl.Name()
 
-		if name != "" {
-			buf := bytes.NewBuffer([]byte{})
-			err = tpl.Execute(buf, nil)
+		if name != "" && !isCommand(name) {
+			tplContent, err := getContent(tpl)
 			if err != nil {
 				return err
 			}
 
-			tplContent := strings.TrimSpace(buf.String())
+			path := p.buildOutPath(name)
+			dir := filepath.Dir(path)
+			err = os.MkdirAll(dir, 0777)
+			if err != nil {
+				return err
+			}
 
-			// templates who's name start with "# " are indicating a command set
-			if strings.HasPrefix(string(name), "# ") {
-				log.Printf("Executing command set: %s\n", strings.TrimPrefix(string(name), "# "))
-				commands := strings.Split(tplContent, "\n")
-				for _, command := range commands {
-					log.Printf("\t # %s\n", command)
-					args := strings.Split(command, " ")
-					if len(args) > 0 {
-						cmd := exec.Command(args[0], args[1:]...)
-						out := bytes.Buffer{}
+			log.Printf("Creating file %s\n", path)
+			f, err := os.Create(path)
+			if err != nil {
+				return err
+			}
 
-						cmd.Stdout = &out
-						err := cmd.Run()
-						if err != nil {
-							return err
-						}
+			io.WriteString(f, tplContent)
+		}
+	}
+
+	// second iteration for commands
+	for _, tpl := range t.Templates() {
+		name := tpl.Name()
+
+		if name != "" && isCommand(name) {
+			tplContent, err := getContent(tpl)
+			if err != nil {
+				return err
+			}
+
+			log.Printf("Executing command set: %s\n", strings.TrimPrefix(string(name), "# "))
+			commands := strings.Split(tplContent, "\n")
+			for _, command := range commands {
+				log.Printf("\t # %s\n", command)
+				args := strings.Split(command, " ")
+				if len(args) > 0 {
+					cmd := exec.Command(args[0], args[1:]...)
+					out := bytes.Buffer{}
+
+					cmd.Stdout = &out
+					err := cmd.Run()
+					if err != nil {
+						return err
 					}
 				}
-			} else {
-				path := p.buildOutPath(name)
-				dir := filepath.Dir(path)
-				err := os.MkdirAll(dir, 0777)
-				if err != nil {
-					return err
-				}
-
-				log.Printf("Creating file %s\n", path)
-				f, err := os.Create(path)
-				if err != nil {
-					return err
-				}
-
-				io.WriteString(f, tplContent)
 			}
 		}
 	}
